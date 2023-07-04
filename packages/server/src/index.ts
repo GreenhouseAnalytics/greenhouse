@@ -1,6 +1,7 @@
 import express, { Response, Request } from "express";
 import bodyParser from "body-parser";
 import morgan from "morgan";
+import cors from "cors";
 import { eventRoutes } from "./routes/event";
 import { userRoutes } from "./routes/user";
 import { version } from "../package.json";
@@ -11,9 +12,15 @@ const app = express();
 // Request logging
 app.use(morgan("tiny"));
 
+// Enable cors
+const corsMiddleware = cors({ origin: true, credentials: true });
+app.use(corsMiddleware);
+app.options("*", corsMiddleware);
+
 // JSON body middleware
-app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ type: "*/*" }));
+app.use(bodyParser.text());
 
 // Default route
 app.get("/", (req: Request, res: Response) => {
