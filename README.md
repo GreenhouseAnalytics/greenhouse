@@ -1,2 +1,3 @@
-# greenhouse
-A realtime event analytics platform
+# [ALPHA] Greenhouse Analytics
+
+A realtime event analytics platform.
