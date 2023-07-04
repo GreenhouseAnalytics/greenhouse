@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 
 x-common-env: &common-env
    CLICKHOUSE_HOST: http://clickhouse:8123
@@ -7,18 +7,39 @@ x-common-env: &common-env
    CLICKHOUSE_PASSWORD:
 
 services:
+  # Clickhouse DB
   clickhouse:
     image: clickhouse/clickhouse-server
     environment:
       <<: *common-env
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     ports:
-      - 9001:9001
+      - 9000:9000
       - 8123:8123
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://clickhouse:8123/ping || exit 1
+      retries: 5
 
-  ingestion:
-    build: ./packages/ingestion
+  # Data ingestion server
+  server:
+    build: ./packages/server
     environment:
       <<: *common-env
       PORT: 6433
     ports:
       - 6433:6433
+
+  # Run migrations
+  migrations:
+    build: ./packages/server
+    environment:
+      <<: *common-env
+    command: sh /app/bin/migrations
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+
