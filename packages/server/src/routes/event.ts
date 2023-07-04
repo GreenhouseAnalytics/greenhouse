@@ -71,14 +71,25 @@ export const eventRoutes = (app: Express) => {
   app.post(
     "/event",
     async (req: Request<object, EventPayload>, res: Response) => {
-      const payload = req.body;
+      try {
+        let payload = req.body;
 
-      const data = convertPayload(payload);
-      if (data && data.events?.length > 0) {
-        await EventService.create(payload);
+        // Parse payload string
+        if (typeof payload === "string") {
+          payload = JSON.parse(payload);
+        }
+
+        // Log event
+        const data = convertPayload(payload);
+        if (data && data.events?.length > 0) {
+          await EventService.create(data);
+        }
+
+        res.status(200).send();
+      } catch (error) {
+        console.error(error);
+        return res.status(500).send();
       }
-
-      res.status(200).send();
     }
   );
 };
