@@ -11,7 +11,7 @@
     "clickhouse:down": "docker stop clickhouse-server",
     "clickhouse:migrations": "./bin/migrations",
     "test": "jest",
-    "production": "yarn pm2-runtime dist/server/index.js",
+    "production": "yarn pm2-runtime dist/src/server/index.js",
     "prepublish": "npm run build"
   },
   "packageManager": "yarn@3.6.0",
