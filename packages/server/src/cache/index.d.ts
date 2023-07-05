@@ -15,6 +15,11 @@ export interface GreenhouseCache {
   set(key: string, value: unknown, ttlMinutes?: number): Promise<void>;
 
   /**
+   * Remove a cache value.
+   */
+  remove(key: string): Promise<void>;
+
+  /**
    * Clear entire cache
    */
   clear(): Promise<void>;

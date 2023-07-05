@@ -5,9 +5,6 @@ CREATE TABLE IF NOT EXISTS user (
   created_at DateTime DEFAULT now(),
   updated_at DateTime DEFAULT now(),
   is_deleted UInt8 DEFAULT 0,
-  name String DEFAULT NULL,
-  email String DEFAULT NULL,
-  avatar String DEFAULT NULL,
 ) ENGINE = ReplacingMergeTree(updated_at, is_deleted)
 ORDER BY
   id PRIMARY KEY (id) SETTINGS clean_deleted_rows = 'Always';
@@ -47,13 +44,9 @@ CREATE TABLE IF NOT EXISTS event (
   timestamp DateTime DEFAULT now(),
 ) ENGINE = MergeTree PRIMARY KEY (user_alias_id, event, timestamp);
 
--- User/Event property data
--- Primarily this is used to map the user-defined property name to the column
--- as well as tracking which data types have been used.
+-- User/Event property name to column mapping
 CREATE TABLE IF NOT EXISTS property (
   name String,
   for Enum('event', 'user'),
-  column String,
-  data_type Enum('str', 'num', 'bool', 'date'),
-  timestamp DateTime DEFAULT now(),
-) ENGINE = ReplacingMergeTree PRIMARY KEY (name, column, for, data_type)
+  column String timestamp DateTime DEFAULT now(),
+) ENGINE = ReplacingMergeTree PRIMARY KEY (name, column, for)

@@ -5,27 +5,20 @@ export enum PropFor {
   USER = "user",
 }
 
-export enum PropDataType {
-  str = "str",
-  num = "num",
-  bool = "bool",
-  date = "date",
-}
+export const ValidPropDataTypes = [
+  "String",
+  "Boolean",
+  "Float64",
+  "DateTime",
+] as const;
+export type ValidPropDataType = (typeof ValidPropDataTypes)[number];
 
 export type PropValue = string | number | boolean;
-
-export type PropertyTuple = {
-  str: string | null;
-  num: number | null;
-  bool: boolean | null;
-  date: string | null;
-};
 
 export type PropertyRecord = {
   name: string;
   for: PropFor;
   column: string;
-  dataTypes: PropDataType[];
   timestamp: number;
 };
 
@@ -33,7 +26,6 @@ export type PropertyRow = {
   name: string;
   for: PropFor;
   column: string;
-  data_type: PropDataType;
   timestamp?: number;
 };
 
@@ -55,10 +47,9 @@ export const Property = {
             name,
             for,
             column,
-            groupArray(10)(data_type) as dataTypes
+            dataType
           FROM property
           WHERE for = {propFor: String}
-          GROUP BY name, for, column
         `,
         format: "JSONEachRow",
       })
@@ -79,21 +70,25 @@ export const Property = {
   /**
    * Define property columns on target table (i.e. event or user)
    */
-  async addPropColumns(onTable: PropFor, cols: string[]) {
-    const work = cols.map(async (col) => {
-      if (!col) {
-        return;
-      }
-      const resultSet = await clickhouse.exec({
-        query: `ALTER TABLE ${onTable} ADD COLUMN IF NOT EXISTS "${col}" Tuple(
-          str Nullable(String),
-          num Nullable(Float64),
-          bool Nullable(Boolean),
-          date Nullable(DateTime)
-        ) DEFAULT (NULL, NULL, NULL, NULL)`,
-      });
-      resultSet.stream.destroy();
+  async addPropColumns(onTable: PropFor, cols: Map<string, ValidPropDataType>) {
+    const colQueries = [...cols.keys()]
+      .map(async (name) => {
+        if (!name) {
+          return;
+        }
+        const type = cols.get(name);
+        return [
+          `ALTER COLUMN IF EXISTS "${name}" Nullable(${type}) DEFAULT NULL`,
+          `ADD COLUMN IF NOT EXISTS "${name}" Nullable(${type}) DEFAULT NULL`,
+        ].join(",\n");
+      })
+      .join(",\n");
+
+    await clickhouse.command({
+      query: `ALTER TABLE ${onTable}\n${colQueries}`,
+      clickhouse_settings: {
+        wait_end_of_query: 1,
+      },
     });
-    await Promise.all(work);
   },
 };

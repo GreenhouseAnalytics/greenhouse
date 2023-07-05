@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid";
 
 import { UserRecord } from "../data/User";
 import { Event } from "../data/Event";
-import { PROPERTY_PREFIX, PropDataType, PropFor } from "../data/Property";
+import { PROPERTY_PREFIX, PropFor } from "../data/Property";
 import { PropertyService } from "./PropertyService";
 import { UserService } from "./UserService";
 import { EventService, EventPayload } from "./EventService";
@@ -18,10 +18,10 @@ describe("EventService", () => {
         alias_id: "alias",
       };
       jest.spyOn(UserService, "getOrCreate").mockResolvedValue(user);
-      jest.spyOn(PropertyService, "createPropColumns").mockResolvedValue(
+      jest.spyOn(PropertyService, "updatePropColumns").mockResolvedValue(
         new Map([
-          ["foo", `${PROPERTY_PREFIX}_foo`],
-          ["bar", `${PROPERTY_PREFIX}_bar`],
+          ["foo", { name: `${PROPERTY_PREFIX}_foo`, type: "String" }],
+          ["bar", { name: `${PROPERTY_PREFIX}_bar`, type: "String" }],
         ])
       );
       Event.insert = jest.fn();
@@ -38,12 +38,7 @@ describe("EventService", () => {
           time: expect.anything(),
           event: "test.event",
           user_alias_id: user.alias_id,
-          [`${PROPERTY_PREFIX}_foo`]: {
-            [PropDataType.str]: "fuz",
-            [PropDataType.num]: null,
-            [PropDataType.bool]: null,
-            [PropDataType.date]: null,
-          },
+          [`${PROPERTY_PREFIX}_foo`]: "fuz",
         },
       ]);
     });
@@ -54,7 +49,7 @@ describe("EventService", () => {
         events: [{ name: "test.event", props: { foo: "fuz" }, time: 1 }],
       });
 
-      expect(PropertyService.createPropColumns).toBeCalledWith(PropFor.EVENT, [
+      expect(PropertyService.updatePropColumns).toBeCalledWith(PropFor.EVENT, [
         ["foo", "fuz"],
       ]);
     });

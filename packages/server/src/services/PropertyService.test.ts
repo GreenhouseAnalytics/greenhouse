@@ -1,19 +1,14 @@
 import "jest";
 import { Event } from "../data/Event";
 import { User } from "../data/User";
-import {
-  Property,
-  PropFor,
-  PropValue,
-  PropDataType,
-  PROPERTY_PREFIX,
-} from "../data/Property";
+import { Property, PropFor, PROPERTY_PREFIX } from "../data/Property";
 import { LocalCache } from "../cache";
 import { PropertyService } from "./PropertyService";
 
 describe("PropertyService", () => {
   let cacheHasFn: jest.SpyInstance;
   let cacheGetFn: jest.SpyInstance;
+  let cacheRemoveFn: jest.SpyInstance;
 
   beforeEach(() => {
     // Disable cache
@@ -23,6 +18,9 @@ describe("PropertyService", () => {
     cacheGetFn = jest
       .spyOn(LocalCache.prototype, "get")
       .mockImplementation((_: string) => Promise.resolve());
+    cacheRemoveFn = jest
+      .spyOn(LocalCache.prototype, "remove")
+      .mockResolvedValue();
   });
 
   describe("convert2ColumnName", () => {
@@ -89,269 +87,30 @@ describe("PropertyService", () => {
     });
   });
 
-  describe("determineTupleType", () => {
-    test("number", () => {
-      const result = PropertyService.determineTupleType(1);
-      expect(result).toBe(PropDataType.num);
+  describe("expandDataType", () => {
+    test("from boolean to number", () => {
+      const result = PropertyService.expandDataType("Float64", "Boolean");
+      expect(result).toBe("Float64");
     });
 
-    test("zero", () => {
-      const result = PropertyService.determineTupleType(0);
-      expect(result).toBe(PropDataType.num);
+    test("from number to boolean", () => {
+      const result = PropertyService.expandDataType("Boolean", "Float64");
+      expect(result).toBe("Float64");
     });
 
-    test("negative number", () => {
-      const result = PropertyService.determineTupleType(-123);
-      expect(result).toBe(PropDataType.num);
+    test("from number to DateTime", () => {
+      const result = PropertyService.expandDataType("DateTime", "Float64");
+      expect(result).toBe("String");
     });
 
-    test("floating point", () => {
-      const result = PropertyService.determineTupleType(12.05);
-      expect(result).toBe(PropDataType.num);
+    test("from DateTime to boolean", () => {
+      const result = PropertyService.expandDataType("Boolean", "DateTime");
+      expect(result).toBe("String");
     });
 
-    test("string", () => {
-      const result = PropertyService.determineTupleType("hello");
-      expect(result).toBe(PropDataType.str);
-    });
-
-    test("date string", () => {
-      const result = PropertyService.determineTupleType("2023-01-14");
-      expect(result).toBe(PropDataType.date);
-    });
-
-    test("timestamp", () => {
-      const result = PropertyService.determineTupleType("2023-01-14T11:30:30");
-      expect(result).toBe(PropDataType.date);
-    });
-
-    test("object", () => {
-      const result = PropertyService.determineTupleType({});
-      expect(result).toBe(PropDataType.str);
-    });
-
-    test("array", () => {
-      const result = PropertyService.determineTupleType([]);
-      expect(result).toBe(PropDataType.str);
-    });
-
-    test("null", () => {
-      const result = PropertyService.determineTupleType(null);
-      expect(result).toBe(null);
-    });
-
-    test("undefined", () => {
-      const result = PropertyService.determineTupleType(undefined);
-      expect(result).toBe(null);
-    });
-  });
-
-  describe("getValueTuple", () => {
-    const nullTuple = {
-      str: null,
-      num: null,
-      bool: null,
-      date: null,
-    };
-
-    test("assign value to type in tuple object", () => {
-      const value = PropertyService.getValueTuple(false);
-      expect(value).toEqual({ ...nullTuple, bool: false });
-    });
-
-    test("explicitly cast unknown value to string", () => {
-      const value = PropertyService.getValueTuple({} as unknown as PropValue);
-      expect(value).toEqual({ ...nullTuple, str: "{}" });
-    });
-
-    test("null returns an null tuple object", () => {
-      const value = PropertyService.getValueTuple(null);
-      expect(value).toEqual(nullTuple);
-    });
-
-    test("undefined returns null tuple object", () => {
-      const value = PropertyService.getValueTuple(
-        undefined as unknown as PropValue
-      );
-      expect(value).toEqual(nullTuple);
-    });
-  });
-
-  describe("createPropColumns", () => {
-    beforeEach(() => {
-      Property.create = jest.fn();
-      Property.addPropColumns = jest.fn();
-      jest.spyOn(PropertyService, "getTableColumns").mockResolvedValue([]);
-      jest
-        .spyOn(PropertyService, "getPropertyDefinitionList")
-        .mockResolvedValue([]);
-    });
-
-    test("return map of property names to column names", async () => {
-      const result = await PropertyService.createPropColumns(PropFor.EVENT, [
-        ["foo", "value"],
-      ]);
-      expect(result.get("foo")).toBe(`${PROPERTY_PREFIX}_foo`);
-    });
-
-    test("create new property", async () => {
-      await PropertyService.createPropColumns(PropFor.EVENT, [
-        ["foo", "value"],
-      ]);
-      expect(Property.create).toBeCalledWith([
-        {
-          name: "foo",
-          column: `${PROPERTY_PREFIX}_foo`,
-          for: PropFor.EVENT,
-          data_type: PropDataType.str,
-        },
-      ]);
-      expect(Property.addPropColumns).toBeCalledWith(PropFor.EVENT, [
-        `${PROPERTY_PREFIX}_foo`,
-      ]);
-    });
-
-    test("property already exists", async () => {
-      jest
-        .spyOn(PropertyService, "getTableColumns")
-        .mockResolvedValue([`${PROPERTY_PREFIX}_foo`]);
-
-      jest
-        .spyOn(PropertyService, "getPropertyDefinitionList")
-        .mockResolvedValue([
-          {
-            name: "foo",
-            column: `${PROPERTY_PREFIX}_foo`,
-            dataTypes: [PropDataType.str],
-            for: PropFor.EVENT,
-            timestamp: 0,
-          },
-        ]);
-
-      await PropertyService.createPropColumns(PropFor.EVENT, [
-        ["foo", "value"],
-      ]);
-
-      expect(Property.create).not.toBeCalled();
-      expect(Property.addPropColumns).not.toBeCalled();
-    });
-
-    test("property exists in property table, but not as a table column", async () => {
-      jest
-        .spyOn(PropertyService, "getPropertyDefinitionList")
-        .mockResolvedValue([
-          {
-            name: "foo",
-            column: `${PROPERTY_PREFIX}_foo`,
-            dataTypes: [PropDataType.str],
-            for: PropFor.EVENT,
-            timestamp: 0,
-          },
-        ]);
-
-      await PropertyService.createPropColumns(PropFor.EVENT, [
-        ["foo", "value"],
-      ]);
-
-      expect(Property.create).not.toBeCalled();
-      expect(Property.addPropColumns).toBeCalledWith(PropFor.EVENT, [
-        `${PROPERTY_PREFIX}_foo`,
-      ]);
-    });
-
-    test("property value is null, no need to create property", async () => {
-      await PropertyService.createPropColumns(PropFor.EVENT, [["foo", null]]);
-      expect(Property.create).not.toBeCalled();
-      expect(Property.addPropColumns).not.toBeCalled();
-    });
-
-    test("add new data-type to property table for existing property", async () => {
-      jest
-        .spyOn(PropertyService, "getTableColumns")
-        .mockResolvedValue([`${PROPERTY_PREFIX}_foo`]);
-      jest
-        .spyOn(PropertyService, "getPropertyDefinitionList")
-        .mockResolvedValue([
-          {
-            name: "foo",
-            column: `${PROPERTY_PREFIX}_foo`,
-            dataTypes: [PropDataType.str],
-            for: PropFor.EVENT,
-            timestamp: 0,
-          },
-        ]);
-
-      await PropertyService.createPropColumns(PropFor.EVENT, [["foo", false]]);
-
-      expect(Property.addPropColumns).not.toBeCalled();
-      expect(Property.create).toBeCalledWith([
-        {
-          name: "foo",
-          column: `${PROPERTY_PREFIX}_foo`,
-          for: PropFor.EVENT,
-          data_type: PropDataType.bool,
-        },
-      ]);
-    });
-
-    test("ignore case when matching with property definitions", async () => {
-      jest
-        .spyOn(PropertyService, "getPropertyDefinitionList")
-        .mockResolvedValue([
-          {
-            name: "FoO",
-            column: `${PROPERTY_PREFIX}_foo`,
-            dataTypes: [PropDataType.str],
-            for: PropFor.EVENT,
-            timestamp: 0,
-          },
-        ]);
-
-      await PropertyService.createPropColumns(PropFor.EVENT, [
-        ["fOo", "value"],
-      ]);
-      expect(Property.create).not.toBeCalled();
-    });
-
-    describe("built-in properties", () => {
-      beforeEach(() => {
-        User.BUILT_IN_PROPERTIES["name"] = PropDataType.str;
-        jest
-          .spyOn(PropertyService, "getTableColumns")
-          .mockResolvedValue(["name"]);
-      });
-
-      test("Create property definition but not the column", async () => {
-        const colMap = await PropertyService.createPropColumns(PropFor.USER, [
-          ["name", "value"],
-        ]);
-        expect(Property.addPropColumns).not.toBeCalled();
-        expect(Property.create).toBeCalledWith([
-          {
-            column: "name",
-            name: "name",
-            data_type: PropDataType.str,
-            for: PropFor.USER,
-          },
-        ]);
-        expect(colMap.get("name")).toBe("name");
-      });
-
-      test("data types do not match, drop property value", async () => {
-        const colMap = await PropertyService.createPropColumns(PropFor.USER, [
-          ["name", 1],
-          ["foo", "bar"],
-        ]);
-        expect(colMap.has("name")).not.toBeTruthy();
-        expect(colMap.get("foo")).toBe(`${PROPERTY_PREFIX}_foo`);
-      });
-
-      test("case insensitive match", async () => {
-        const colMap = await PropertyService.createPropColumns(PropFor.USER, [
-          ["NaMe", "value"],
-        ]);
-        expect(colMap.get("NaMe")).toBe("name");
-      });
+    test("from and to match", () => {
+      const result = PropertyService.expandDataType("Boolean", "Boolean");
+      expect(result).toBe("Boolean");
     });
   });
 
@@ -374,96 +133,211 @@ describe("PropertyService", () => {
     });
   });
 
-  describe("getTableColumns", () => {
+  describe("updatePropColumns", () => {
     beforeEach(() => {
-      Event.getColumns = jest.fn().mockResolvedValue(["event_col"]);
-      User.getColumns = jest.fn().mockResolvedValue(["user_col"]);
+      Property.create = jest.fn().mockResolvedValue(null);
+      Property.addPropColumns = jest.fn().mockResolvedValue(null);
+
+      jest.spyOn(PropertyService, "getTablePropColumns").mockResolvedValue({
+        [`${PROPERTY_PREFIX}_prop`]: "Boolean",
+      });
+      jest
+        .spyOn(PropertyService, "getPropertyDefinitionList")
+        .mockResolvedValue([
+          {
+            name: "prop",
+            column: `${PROPERTY_PREFIX}_prop`,
+            for: PropFor.EVENT,
+            timestamp: 1,
+          },
+        ]);
+    });
+
+    test("create new column & mapping", async () => {
+      await PropertyService.updatePropColumns(PropFor.EVENT, [
+        ["new_prop", "value"],
+      ]);
+      expect(Property.create).toBeCalledWith([
+        expect.objectContaining({
+          name: "new_prop",
+          column: `${PROPERTY_PREFIX}_new_prop`,
+          for: PropFor.EVENT,
+        }),
+      ]);
+      expect(Property.addPropColumns).toBeCalledWith(
+        PropFor.EVENT,
+        new Map([[`${PROPERTY_PREFIX}_new_prop`, "String"]])
+      );
+    });
+
+    test("column already exists", async () => {
+      await PropertyService.updatePropColumns(PropFor.EVENT, [["prop", true]]);
+      expect(Property.create).not.toBeCalled();
+      expect(Property.addPropColumns).not.toBeCalled();
+    });
+
+    test("case insensitive matching", async () => {
+      await PropertyService.updatePropColumns(PropFor.EVENT, [["pRoP", true]]);
+      expect(Property.create).not.toBeCalled();
+      expect(Property.addPropColumns).not.toBeCalled();
+    });
+
+    test("expand the column data type", async () => {
+      await PropertyService.updatePropColumns(PropFor.EVENT, [["prop", 123]]);
+      expect(Property.create).not.toBeCalled();
+      expect(Property.addPropColumns).toBeCalledWith(
+        PropFor.EVENT,
+        new Map([[`${PROPERTY_PREFIX}_prop`, "Float64"]])
+      );
+    });
+
+    test("data type is already expanded for this type", async () => {
+      jest.spyOn(PropertyService, "getTablePropColumns").mockResolvedValue({
+        [`${PROPERTY_PREFIX}_prop`]: "String",
+      });
+      await PropertyService.updatePropColumns(PropFor.EVENT, [["prop", 123]]);
+      expect(Property.create).not.toBeCalled();
+      expect(Property.addPropColumns).not.toBeCalled();
+    });
+
+    test("mapping exists but column needs to be created", async () => {
+      jest.spyOn(PropertyService, "getTablePropColumns").mockResolvedValue({});
+      await PropertyService.updatePropColumns(PropFor.EVENT, [["prop", 123]]);
+      expect(Property.create).not.toBeCalled();
+      expect(Property.addPropColumns).toBeCalled();
+    });
+
+    test("clear cache after updating columns", async () => {
+      await PropertyService.updatePropColumns(PropFor.EVENT, [
+        ["new_prop", "value"],
+      ]);
+      expect(cacheRemoveFn).toBeCalled();
+    });
+
+    test("do not clear cache if no updates were necessary", async () => {
+      await PropertyService.updatePropColumns(PropFor.EVENT, [["prop", true]]);
+      expect(cacheRemoveFn).not.toBeCalled();
+    });
+  });
+
+  describe("getTablePropColumns", () => {
+    beforeEach(() => {
+      Event.describe = jest
+        .fn()
+        .mockResolvedValue([
+          { name: `${PROPERTY_PREFIX}_event_col`, type: "Nullable(String)" },
+        ]);
+      User.describe = jest
+        .fn()
+        .mockResolvedValue([
+          { name: `${PROPERTY_PREFIX}_user_col`, type: "Nullable(String)" },
+        ]);
     });
 
     test("event table", async () => {
-      const result = await PropertyService.getTableColumns(PropFor.EVENT);
-      expect(Event.getColumns).toBeCalled();
-      expect(result).toEqual(["event_col"]);
+      const result = await PropertyService.getTablePropColumns(PropFor.EVENT);
+      expect(Event.describe).toBeCalled();
+      expect(result).toEqual({ [`${PROPERTY_PREFIX}_event_col`]: "String" });
     });
 
     test("user table", async () => {
-      const result = await PropertyService.getTableColumns(PropFor.USER);
-      expect(User.getColumns).toBeCalled();
-      expect(result).toEqual(["user_col"]);
+      const result = await PropertyService.getTablePropColumns(PropFor.USER);
+      expect(User.describe).toBeCalled();
+      expect(result).toEqual({ [`${PROPERTY_PREFIX}_user_col`]: "String" });
     });
 
     test("unknown table", async () => {
-      const result = await PropertyService.getTableColumns(
+      const result = await PropertyService.getTablePropColumns(
         "unknown" as unknown as PropFor
       );
-      expect(Event.getColumns).not.toBeCalled();
-      expect(User.getColumns).not.toBeCalled();
-      expect(result).toEqual([]);
+      expect(Event.describe).not.toBeCalled();
+      expect(User.describe).not.toBeCalled();
+      expect(result).toEqual({});
     });
 
     test("use cache", async () => {
       cacheHasFn.mockResolvedValue(true);
       cacheGetFn.mockResolvedValue(["cached_col"]);
-      const result = await PropertyService.getTableColumns(PropFor.EVENT);
-      expect(cacheGetFn).toBeCalledWith("Object.getTableColumns#event");
-      expect(Event.getColumns).not.toBeCalled();
+      const result = await PropertyService.getTablePropColumns(PropFor.EVENT);
+      expect(cacheGetFn).toBeCalledWith("event:columns");
+      expect(Event.describe).not.toBeCalled();
       expect(result).toEqual(["cached_col"]);
+    });
+
+    test("unsupported data type", async () => {
+      Event.describe = jest.fn().mockResolvedValue([
+        { name: `${PROPERTY_PREFIX}_event_col`, type: "Nullable(String)" },
+        { name: `${PROPERTY_PREFIX}_enum`, type: "Enum('foo', 'bar')" },
+      ]);
+      const result = await PropertyService.getTablePropColumns(PropFor.EVENT);
+      expect(Event.describe).toBeCalled();
+      expect(result).toEqual({ [`${PROPERTY_PREFIX}_event_col`]: "String" });
+    });
+
+    test("filter out non-property columns", async () => {
+      Event.describe = jest.fn().mockResolvedValue([
+        { name: `${PROPERTY_PREFIX}_event_col`, type: "Nullable(String)" },
+        { name: `name`, type: "String" },
+      ]);
+      const result = await PropertyService.getTablePropColumns(PropFor.EVENT);
+      expect(Event.describe).toBeCalled();
+      expect(result).toEqual({ [`${PROPERTY_PREFIX}_event_col`]: "String" });
     });
   });
 
   describe("castType", () => {
     test("native boolean", () => {
-      const result = PropertyService.castType(false, PropDataType.bool);
+      const result = PropertyService.castType(false, "Boolean");
       expect(result).toBe(false);
     });
 
     test("cast truthy number to boolean", () => {
-      const result = PropertyService.castType(1, PropDataType.bool);
+      const result = PropertyService.castType(1, "Boolean");
       expect(result).toBe(true);
     });
 
     test("cast falsy number to boolean", () => {
-      const result = PropertyService.castType(0, PropDataType.bool);
+      const result = PropertyService.castType(0, "Boolean");
       expect(result).toBe(false);
     });
 
     test("date string to unix epoch", () => {
       const result = PropertyService.castType(
         "2023-01-14T00:00:00.000Z",
-        PropDataType.date
+        "DateTime"
       );
       expect(result).toBe(1673654400000);
     });
 
     test("invalid date string", () => {
-      const result = PropertyService.castType("wtf", PropDataType.date);
+      const result = PropertyService.castType("wtf", "DateTime");
       expect(result).toBe(null);
     });
 
     test("native number", () => {
-      const result = PropertyService.castType(1.234, PropDataType.num);
+      const result = PropertyService.castType(1.234, "Float64");
       expect(result).toBe(1.234);
     });
 
     test("invalid number", () => {
-      const result = PropertyService.castType("one", PropDataType.num);
+      const result = PropertyService.castType("one", "Float64");
       expect(result).toBe(null);
     });
 
     test("cast to number", () => {
-      const result = PropertyService.castType("5", PropDataType.num);
+      const result = PropertyService.castType("5", "Float64");
       expect(result).toBe(5);
     });
 
     test("native string", () => {
-      const result = PropertyService.castType("hello", PropDataType.str);
+      const result = PropertyService.castType("hello", "String");
       expect(result).toBe("hello");
     });
 
     test("cast anything to string", () => {
       const result = PropertyService.castType(
         { foo: "bar" } as unknown as string,
-        PropDataType.str
+        "String"
       );
       expect(result).toBe('{"foo":"bar"}');
     });
@@ -473,22 +347,16 @@ describe("PropertyService", () => {
     beforeEach(() => {
       Property.getProps = jest
         .fn()
-        .mockResolvedValue([
-          { name: "foo", column: ``, dataTypes: [PropDataType.str] },
-        ]);
+        .mockResolvedValue([{ name: "foo", column: `` }]);
     });
 
     test("use cache", async () => {
       cacheHasFn.mockResolvedValue(true);
-      cacheGetFn.mockResolvedValue([
-        { name: "cached", column: ``, dataTypes: [PropDataType.str] },
-      ]);
+      cacheGetFn.mockResolvedValue([{ name: "cached", column: `` }]);
       const result = await PropertyService.getPropertyDefinitionList(
         PropFor.EVENT
       );
-      expect(cacheGetFn).toBeCalledWith(
-        "Object.getPropertyDefinitionList#event"
-      );
+      expect(cacheGetFn).toBeCalledWith("event:mapping");
       expect(Property.getProps).not.toBeCalled();
       expect(result[0]).toEqual(expect.objectContaining({ name: "cached" }));
     });
@@ -499,12 +367,8 @@ describe("PropertyService", () => {
       const result = await PropertyService.getPropertyDefinitionList(
         PropFor.EVENT
       );
-      expect(cacheHasFn).toBeCalledWith(
-        "Object.getPropertyDefinitionList#event"
-      );
-      expect(cacheGetFn).not.toBeCalledWith(
-        "Object.getPropertyDefinitionList#event"
-      );
+      expect(cacheHasFn).toBeCalledWith("event:mapping");
+      expect(cacheGetFn).not.toBeCalledWith("event:mapping");
       expect(Property.getProps).toBeCalled();
       expect(result[0]).toEqual(expect.objectContaining({ name: "foo" }));
     });

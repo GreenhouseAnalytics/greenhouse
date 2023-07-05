@@ -1,28 +1,36 @@
 import { parseISO, isValid as isValidDate } from "date-fns";
-import { LocalCache, cache } from "../cache";
+import { LocalCache } from "../cache";
 import {
   Property,
   PropFor,
   PropValue,
-  PropertyTuple,
-  PropDataType,
   PropertyRow,
   PropertyRecord,
+  ValidPropDataTypes,
+  ValidPropDataType,
   PROPERTY_PREFIX,
 } from "../data/Property";
 import { Event } from "../data/Event";
 import { User } from "../data/User";
+import logger from "../logger";
 
 const cacheStore = new LocalCache(60);
 
 /**
  * Manages creating new properties on the event and user tables.
  */
-export class PropertyService {
+export const PropertyService = {
+  /**
+   * Generate a cache key
+   */
+  getCacheKey(forResource: PropFor, type: "columns" | "mapping") {
+    return `${forResource}:${type}`;
+  },
+
   /**
    * Create a valid column name from a user-defined string
    */
-  static convert2ColumnName(name: string, existing: string[]) {
+  convert2ColumnName(name: string, existing: string[]) {
     let column = name
       .trim()
       .replace(/([a-z])([A-Z])/g, "$1_$2") // convert camelCase to snake_case
@@ -44,150 +52,160 @@ export class PropertyService {
     }
 
     return column;
-  }
+  },
 
   /**
-   * Determine which tuple slot this value should go it.
+   * Determine the property type
    */
-  static determineTupleType(val: unknown) {
+  determineDataType(val: unknown): ValidPropDataType | null {
     if (val === null || typeof val === "undefined") {
       return null;
     }
 
     switch (typeof val) {
       case "number":
-        return PropDataType.num;
+        return "Float64";
       case "boolean":
-        return PropDataType.bool;
+        return "Boolean";
       case "object":
       case "string": {
         // Is the string actually a date
         if (typeof val === "string") {
           const isDate = isValidDate(parseISO(val));
           if (isDate) {
-            return PropDataType.date;
+            return "DateTime";
           }
         }
-        return PropDataType.str;
+        return "String";
       }
     }
-    return PropDataType.str;
-  }
+    return "String";
+  },
 
   /**
-   * Return the property value formatted into the correct tuple space
+   * Change the property type to meet the needs of both data types
    */
-  static getValueTuple(value: PropValue | null): PropertyTuple {
-    const nullTuple: PropertyTuple = {
-      [PropDataType.str]: null,
-      [PropDataType.num]: null,
-      [PropDataType.bool]: null,
-      [PropDataType.date]: null,
-    };
-    if (value === null) {
-      return nullTuple;
+  expandDataType(
+    newType: ValidPropDataType,
+    existingType: ValidPropDataType
+  ): ValidPropDataType {
+    if (newType === existingType) {
+      return newType;
     }
-
-    const type = this.determineTupleType(value);
-    if (type === null) {
-      return nullTuple;
+    if (existingType === "Boolean" && newType === "Float64") {
+      return "Float64";
     }
-
-    const castedValue = this.castType(value, type);
-    return {
-      ...nullTuple,
-      [type]: castedValue,
-    };
-  }
+    if (existingType === "Float64" && newType === "Boolean") {
+      return "Float64";
+    }
+    return "String";
+  },
 
   /**
-   * Create new prop columns, if necessary
+   * Create/update prop columns if necessary
    */
-  static async createPropColumns(
+  async updatePropColumns(
     propFor: PropFor,
     propsEntries: [/*name*/ string, /*value*/ unknown][]
-  ): Promise<Map<string, string>> {
-    const columnMap = new Map<string, string>();
-    const builtInProps = this.getBuiltInProps(propFor);
+  ) {
+    const columnMap = new Map<
+      string,
+      { name: string; type: ValidPropDataType }
+    >();
+    const columnUpdates = new Map<string, ValidPropDataType>();
+    const newPropMappings: PropertyRow[] = [];
 
-    // Get existing prop definitions
+    // Existing props
+    const tableColumnTypes = await this.getTablePropColumns(propFor);
+    const tableColumnNames = Object.keys(tableColumnTypes);
+
+    // Get existing prop name to column mappings
     const existingProps = await this.getPropertyDefinitionList(propFor);
     const existingPropMap = new Map<string, PropertyRecord>();
     existingProps.forEach((row) => {
       existingPropMap.set(row.name.toLowerCase(), row);
-      columnMap.set(row.name, row.column);
     });
 
-    // Get existing table columns directly
-    const existingColumns = await this.getTableColumns(propFor);
-
-    // Find missing props
-    const newPropTypeRecords: PropertyRow[] = [];
-    const newPropColumns: string[] = [];
+    // Find props that need to be added/updated
     propsEntries.forEach(([name, value]) => {
-      const propDef = existingPropMap.get(name.toLowerCase());
-      const registeredTypes = propDef?.dataTypes ?? [];
-      const dataType = this.determineTupleType(value);
-      let columnName = propDef?.column;
+      const normalizedName = name.toLowerCase();
+      const existingMapping = existingPropMap.get(normalizedName);
+      let columnName: string;
 
-      // This is a built-in type, use the name as-is (but lower-cased)
-      const builtInName = name.toLowerCase();
-      if (builtInProps[builtInName]) {
-        // If the data-types do not match, drop this property value
-        if (dataType !== builtInProps[builtInName]) {
-          return;
-        }
-        columnName = builtInName;
-      }
-
-      // Convert property name to column name
-      if (!columnName) {
-        columnName = this.convert2ColumnName(name, existingColumns);
-      }
-
-      // If the value is null, no need to create the column
-      if (dataType === null) {
+      // Infer the property type from the input value
+      // If the input value is null, no need to create the column
+      let columnType = this.determineDataType(value);
+      if (columnType === null) {
         return;
       }
 
-      // A new property column needs to be created
-      if (columnName && !existingColumns.includes(columnName)) {
-        newPropColumns.push(columnName);
+      // This property has already been defined
+      if (typeof existingMapping !== "undefined") {
+        columnName = existingMapping.column;
+      }
+      // Create the column name
+      else {
+        columnName = this.convert2ColumnName(name, tableColumnNames);
+      }
+      const existingType = tableColumnTypes[columnName];
+      const expandedType = this.expandDataType(columnType, existingType);
+
+      // A new table column needs to be created
+      if (!tableColumnNames.includes(columnName)) {
+        columnUpdates.set(columnName, columnType);
+      }
+      // The existing property type needs to change
+      else if (
+        typeof existingType !== "undefined" &&
+        existingType !== expandedType
+      ) {
+        columnType = expandedType;
+        columnUpdates.set(columnName, expandedType);
+        logger.warn(
+          `Property '${name}' type being changed from ${existingType} to ${columnType}`
+        );
       }
 
-      // Register the property if we haven't logged this data-type for it
-      if (!registeredTypes.includes(dataType)) {
-        newPropTypeRecords.push({
+      // Register the prop name to column mapping
+      if (!existingMapping) {
+        newPropMappings.push({
           name,
           column: columnName,
           for: propFor,
-          data_type: dataType,
         });
       }
 
-      columnMap.set(name, columnName);
+      columnMap.set(name, { name: columnName, type: columnType });
     });
 
-    // Create property definitions
+    // Create property mappings
     let createDefs = Promise.resolve();
-    if (newPropTypeRecords.length) {
-      createDefs = Property.create(newPropTypeRecords);
+    if (newPropMappings.length) {
+      createDefs = Property.create(newPropMappings);
     }
 
     // Add prop columns to table
     let createCols = Promise.resolve();
-    if (newPropColumns.length) {
-      createCols = Property.addPropColumns(propFor, newPropColumns);
+    if (columnUpdates.size) {
+      createCols = Property.addPropColumns(propFor, columnUpdates);
+    }
+    await Promise.all([createDefs, createCols]);
+
+    // Clear cache
+    if (newPropMappings.length || columnUpdates.size) {
+      await Promise.all([
+        cacheStore.remove(this.getCacheKey(propFor, "columns")),
+        cacheStore.remove(this.getCacheKey(propFor, "mapping")),
+      ]);
     }
 
-    await Promise.all([createDefs, createCols]);
     return columnMap;
-  }
+  },
 
   /**
    * Get table model
    */
-  static getTableModel(table: PropFor) {
+  getTableModel(table: PropFor) {
     switch (table) {
       case PropFor.EVENT:
         return Event;
@@ -196,69 +214,96 @@ export class PropertyService {
       default:
         return null;
     }
-  }
+  },
 
   /**
-   * Get all the columns for a table
+   * Get all the table props and their types
    */
-  @cache(cacheStore)
-  static getTableColumns(table: PropFor): Promise<string[]> {
+  async getTablePropColumns(table: PropFor) {
+    const props: Record<string, ValidPropDataType> = {};
+
+    // Use cache
+    const cacheKey = this.getCacheKey(table, "columns");
+    const hasCache = await cacheStore.has(cacheKey);
+    if (hasCache) {
+      const cacheVal = await cacheStore.get<typeof props>(cacheKey);
+      return cacheVal ?? {};
+    }
+
+    // Get from DB
     const model = this.getTableModel(table);
     if (model) {
-      return model?.getColumns();
+      const data = await model?.describe();
+
+      // Extract types
+      data
+        .filter(({ name }) => {
+          return name.startsWith(`${PROPERTY_PREFIX}_`);
+        })
+        .forEach(({ name, type: fullDbType }) => {
+          // Cleanup DB type notation and ensure it is a supported type
+          const type = fullDbType.replace(/Nullable\((.*?)\)/, "$1");
+          if (!ValidPropDataTypes.includes(type as ValidPropDataType)) {
+            logger.warn(`Invalid property type: ${fullDbType}`);
+            return;
+            type;
+          }
+          props[name] = type as ValidPropDataType;
+        });
     }
-    return Promise.resolve([]);
-  }
+
+    await cacheStore.set(cacheKey, props);
+    return props;
+  },
 
   /**
    * Get the full list of property definition
    */
-  @cache(cacheStore)
-  static getPropertyDefinitionList(table: PropFor) {
-    return Property.getProps(table);
-  }
-
-  /**
-   * Get built-in strongly typed properties
-   */
-  static getBuiltInProps(table: PropFor): Record<string, PropDataType> {
-    const model = this.getTableModel(table);
-    if (model) {
-      return model?.BUILT_IN_PROPERTIES ?? {};
+  async getPropertyDefinitionList(table: PropFor) {
+    // Use cache
+    const cacheKey = this.getCacheKey(table, "mapping");
+    const hasCache = await cacheStore.has(cacheKey);
+    if (hasCache) {
+      const cacheVal = await cacheStore.get<PropertyRecord[]>(cacheKey);
+      return cacheVal ?? [];
     }
-    return {};
-  }
+
+    // Fetch data
+    const props = await Property.getProps(table);
+    await cacheStore.set(cacheKey, props);
+    return props;
+  },
 
   /**
    * Cast the value to a type, or null
    */
-  static castType(
+  castType(
     value: PropValue,
-    type: PropDataType
+    type: ValidPropDataType
   ): string | number | boolean | null {
-    if (type === PropDataType.bool) {
+    if (type === "Boolean") {
       if (typeof value === "boolean") {
         return value;
       } else if (typeof value === "number") {
         return value ? true : false;
       }
-    } else if (type === PropDataType.date && typeof value === "string") {
+    } else if (type === "DateTime" && typeof value === "string") {
       const date = parseISO(value);
       const isDate = isValidDate(date);
       if (isDate) {
         return date.getTime();
       }
-    } else if (type === PropDataType.num) {
+    } else if (type === "Float64") {
       const num = Number(value);
       if (!isNaN(num)) {
         return num;
       }
-    } else if (type === PropDataType.str) {
+    } else if (type === "String") {
       if (typeof value === "string") {
         return value;
       }
       return JSON.stringify(value);
     }
     return null;
-  }
-}
+  },
+};

@@ -5,7 +5,8 @@ import {
   UserPropertySetType,
 } from "../data/UserPropertyTime";
 import { UserAlias } from "../data/UserAlias";
-import { PropFor, PropValue, PropertyTuple } from "../data/Property";
+import { PropFor, PropValue } from "../data/Property";
+import logger from "../logger";
 import { PropertyService } from "./PropertyService";
 
 /**
@@ -59,10 +60,9 @@ export const UserService = {
   ) {
     const user = await this.getOrCreate(userId);
     const propItems = Object.entries(props);
-    const builtInTypes = User.BUILT_IN_PROPERTIES;
 
     // Create prop columns, if necessary
-    const propColumnMap = await PropertyService.createPropColumns(
+    const propColumnMap = await PropertyService.updatePropColumns(
       PropFor.USER,
       propItems
     );
@@ -71,19 +71,7 @@ export const UserService = {
     const propData = propItems.reduce((prev, [name, value]) => {
       const col = propColumnMap.get(name);
       if (typeof col !== "undefined") {
-        // Built-in type doesn't need a tuple
-        if (col in builtInTypes) {
-          const type = builtInTypes[col];
-          const castedValue = PropertyService.castType(value, type);
-          if (castedValue !== null) {
-            prev[col] = castedValue;
-          }
-        }
-        // Add type tuple
-        else {
-          const tuple = PropertyService.getValueTuple(value);
-          prev[col] = tuple;
-        }
+        prev[col.name] = PropertyService.castType(value, col.type);
       }
       return prev;
     }, {} as UserRecord);
@@ -104,34 +92,39 @@ export const UserService = {
    */
   async incrementProperty(userId: string, property: string) {
     const user = await this.getOrCreate(userId);
-    const builtInTypes = User.BUILT_IN_PROPERTIES;
-
-    // Cannot increment built-in types
-    if (typeof builtInTypes[property] !== "undefined") {
-      return;
-    }
 
     // Get column
-    const propColumnMap = await PropertyService.createPropColumns(
+    const propColumnMap = await PropertyService.updatePropColumns(
       PropFor.USER,
       [[property, 1]]
     );
-    const colName = propColumnMap.get(property);
+    const column = propColumnMap.get(property);
     const propData: Partial<UserRecord> = {};
-    if (!colName) {
+    if (!column) {
+      logger.warn(
+        `Cannot increment User property ${property}. DB column not found.`
+      );
       return;
     }
 
-    // Increment value
-    const currTuple = user[colName] as PropertyTuple;
-    const currVal = currTuple?.num || 0;
-    propData[colName] = PropertyService.getValueTuple(currVal + 1);
+    // Get value and attempt to coerce it into a number, if necessary
+    let currVal = user[column.name] || 0;
+    if (typeof currVal !== "number") {
+      currVal = Number(currVal);
+    }
+    if (isNaN(currVal)) {
+      logger.warn(
+        `Cannot increment User property ${property}. It is not a number`
+      );
+      return;
+    }
 
     // Update DB
+    propData[column.name] = PropertyService.castType(currVal + 1, column.type);
     const update = { ...user, ...propData };
     await Promise.all([
       User.update(update),
-      UserPropertyTime.setPropertyTimes(user.id, [[colName, "normal"]]),
+      UserPropertyTime.setPropertyTimes(user.id, [[column.name, "normal"]]),
     ]);
   },
 

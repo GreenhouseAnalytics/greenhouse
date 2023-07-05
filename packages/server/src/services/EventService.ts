@@ -1,5 +1,5 @@
 import { Event, EventRow } from "../data/Event";
-import { PropFor, PropertyTuple, PropValue } from "../data/Property";
+import { PropFor, PropValue } from "../data/Property";
 import { UserService } from "./UserService";
 import { PropertyService } from "./PropertyService";
 
@@ -29,7 +29,7 @@ export class EventService {
     payload.events.forEach((event) => {
       propEntries = propEntries.concat(Object.entries(event.props ?? {}));
     });
-    const propColumnMap = await PropertyService.createPropColumns(
+    const propColumnMap = await PropertyService.updatePropColumns(
       PropFor.EVENT,
       propEntries
     );
@@ -38,7 +38,7 @@ export class EventService {
     const rows = payload.events.map((event) => {
       // Remap props to DB columns
       const props = Object.entries(event.props || {}).reduce<
-        Record<string, PropertyTuple>
+        Record<string, PropValue | null>
       >((prev, [name, value]) => {
         const col = propColumnMap.get(name);
         if (
@@ -46,8 +46,7 @@ export class EventService {
           value !== null &&
           typeof value !== "undefined"
         ) {
-          const tuple = PropertyService.getValueTuple(value);
-          prev[col] = tuple;
+          prev[col.name] = PropertyService.castType(value, col.type);
         }
         return prev;
       }, {});

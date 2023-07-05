@@ -1,6 +1,5 @@
 import { v4 as uuid } from "uuid";
 import { clickhouse } from "../lib/clickhouse";
-import { PropertyTuple, PropDataType } from "./Property";
 
 export type UserRecord = {
   /** The internal user ID */
@@ -13,29 +12,14 @@ export type UserRecord = {
   updated_at?: number;
   is_deleted?: number;
 
-  /** Built-in properties */
-  name?: string | null;
-  email?: string | null;
-  avatar?: string | null;
-
   /** User properties */
-  [key: string]: PropertyTuple | string | number | boolean | null | undefined;
+  [key: string]: string | number | boolean | null | undefined;
 };
 
 /**
  * Data model for a user record
  */
 export const User = {
-  /**
-   * A list of strongly typed properties that are built-in
-   * and do not need to be created or prefixed
-   */
-  BUILT_IN_PROPERTIES: {
-    name: PropDataType.str,
-    email: PropDataType.str,
-    avatar: PropDataType.str,
-  } as Record<string, PropDataType>,
-
   /**
    * Get user records by IDs or alias IDs
    */
@@ -115,6 +99,20 @@ export const User = {
       .then((resultSet) => resultSet.json<{ data: any[] }>())
       .then((results) => results.data);
     return rows.map<string>((row) => row.name);
+  },
+
+  /**
+   * Describe the DB table
+   */
+  async describe() {
+    return clickhouse
+      .query({ query: `DESCRIBE event` })
+      .then((resultSet) =>
+        resultSet.json<{ data: { name: string; type: string }[] }>()
+      )
+      .then((results) =>
+        results.data.map((row) => ({ name: row.name, type: row.type }))
+      );
   },
 
   /**

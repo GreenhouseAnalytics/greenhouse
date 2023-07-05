@@ -18,6 +18,17 @@ describe("LocalCache", () => {
     expect(cache.expires.size).toBe(0);
   });
 
+  test("remove", async () => {
+    await cache.set("foo", "bar");
+    await cache.set("baz", "boo");
+
+    expect(cache.storage.size).toBe(2);
+    await cache.remove("foo");
+    expect(cache.storage.size).toBe(1);
+    await expect(cache.get("foo")).resolves.toBe(undefined);
+    await expect(cache.get("baz")).resolves.toBe("boo");
+  });
+
   describe("set", () => {
     test("add a new cache entry", async () => {
       await cache.set("foo", "bar");

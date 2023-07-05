@@ -15,6 +15,15 @@ export class LocalCache implements GreenhouseCache {
   }
 
   /**
+   * Remove a cache value.
+   */
+  remove(key: string): Promise<void> {
+    this.storage.delete(key);
+    this.expires.delete(key);
+    return Promise.resolve();
+  }
+
+  /**
    * Clear entire cache
    */
   clear() {

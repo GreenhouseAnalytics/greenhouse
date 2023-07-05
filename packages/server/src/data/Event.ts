@@ -12,12 +12,6 @@ export type EventRow = {
  */
 export const Event = {
   /**
-   * A list of strongly typed properties that are built-in
-   * and do not need to be created or prefixed
-   */
-  BUILT_IN_PROPERTIES: {},
-
-  /**
    * Insert an event into the table
    */
   insert(eventRows: EventRow[]) {
@@ -36,5 +30,19 @@ export const Event = {
       .query({ query: `DESCRIBE event` })
       .then((resultSet) => resultSet.json<{ data: { name: string }[] }>())
       .then((results) => results.data.map((row) => row.name));
+  },
+
+  /**
+   * Describe the DB table
+   */
+  async describe() {
+    return clickhouse
+      .query({ query: `DESCRIBE event` })
+      .then((resultSet) =>
+        resultSet.json<{ data: { name: string; type: string }[] }>()
+      )
+      .then((results) =>
+        results.data.map((row) => ({ name: row.name, type: row.type }))
+      );
   },
 };
