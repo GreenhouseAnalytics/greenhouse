@@ -28,9 +28,10 @@ services:
     build: ./packages/server
     environment:
       <<: *common-env
-      PORT: 6433
+      PORT: 3030
+      LOGGING_FORMAT: pretty
     ports:
-      - 6433:6433
+      - 3030:3030
 
   # Run migrations
   migrations:
