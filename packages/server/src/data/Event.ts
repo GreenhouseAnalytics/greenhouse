@@ -23,16 +23,6 @@ export const Event = {
   },
 
   /**
-   * Get table columns
-   */
-  async getColumns() {
-    return clickhouse
-      .query({ query: `DESCRIBE event` })
-      .then((resultSet) => resultSet.json<{ data: { name: string }[] }>())
-      .then((results) => results.data.map((row) => row.name));
-  },
-
-  /**
    * Describe the DB table
    */
   async describe() {

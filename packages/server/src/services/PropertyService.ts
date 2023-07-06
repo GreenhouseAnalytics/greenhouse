@@ -242,7 +242,10 @@ export const PropertyService = {
         })
         .forEach(({ name, type: fullDbType }) => {
           // Cleanup DB type notation and ensure it is a supported type
-          const type = fullDbType.replace(/Nullable\((.*?)\)/, "$1");
+          let type = fullDbType.replace(/Nullable\((.*?)\)/, "$1");
+          if (type === "Bool") {
+            type = "Boolean";
+          }
           if (!ValidPropDataTypes.includes(type as ValidPropDataType)) {
             logger.warn(`Invalid property type: ${fullDbType}`);
             return;

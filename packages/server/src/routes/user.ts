@@ -1,4 +1,5 @@
 import { Express, Request, Response } from "express";
+import logger from "../logger";
 import { UserService } from "../services/UserService";
 
 type AliasBody = {
@@ -25,7 +26,7 @@ export const userRoutes = (app: Express) => {
         await UserService.alias(user, alias);
         res.status(200).send();
       } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(500).send();
       }
     }
@@ -39,7 +40,7 @@ export const userRoutes = (app: Express) => {
         await UserService.setProperties(user, properties, "normal");
         res.status(200).send();
       } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(500).send();
       }
     }
@@ -53,7 +54,7 @@ export const userRoutes = (app: Express) => {
         await UserService.setProperties(user, properties, "once");
         res.status(200).send();
       } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(500).send();
       }
     }
@@ -67,7 +68,7 @@ export const userRoutes = (app: Express) => {
         await UserService.incrementProperty(user, property);
         res.status(200).send();
       } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(500).send();
       }
     }

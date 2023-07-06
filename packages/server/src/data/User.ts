@@ -21,9 +21,9 @@ export type UserRecord = {
  */
 export const User = {
   /**
-   * Get user records by IDs or alias IDs
+   * Get user records by alias IDs
    */
-  async get(ids: string[]): Promise<UserRecord[]> {
+  async getByAliases(ids: string[]): Promise<UserRecord[]> {
     return clickhouse
       .query({
         query_params: { ids },
@@ -35,10 +35,7 @@ export const User = {
           FROM user
           JOIN user_alias ON user_alias.user_id = user.id
           WHERE
-            (
-              user.id in ({ids: Array(UUID)})
-              OR user_alias.alias in ({ids: Array(String)})
-            )
+            user_alias.alias in ({ids: Array(String)})
             AND user.is_deleted = 0
           ORDER BY updated_at DESC
         `,
@@ -50,8 +47,8 @@ export const User = {
   /**
    * Get user record by ID or alias ID
    */
-  async getOne(id: string): Promise<UserRecord> {
-    return this.get([id]).then((list) => list[0]);
+  async getByAlias(alias: string): Promise<UserRecord> {
+    return this.getByAliases([alias]).then((list) => list[0]);
   },
 
   /**
@@ -88,17 +85,6 @@ export const User = {
       values: [{ id, is_deleted: 1 }],
       format: "JSONEachRow",
     });
-  },
-
-  /**
-   * Get table columns
-   */
-  async getColumns() {
-    const rows = await clickhouse
-      .query({ query: `DESCRIBE user` })
-      .then((resultSet) => resultSet.json<{ data: any[] }>())
-      .then((results) => results.data);
-    return rows.map<string>((row) => row.name);
   },
 
   /**

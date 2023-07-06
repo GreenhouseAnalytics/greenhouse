@@ -17,7 +17,7 @@ export const UserService = {
    * Get or create user with ID.
    */
   async getOrCreate(id: string): Promise<UserRecord> {
-    const existing = await User.getOne(id);
+    const existing = await User.getByAlias(id);
 
     // Return existing ID
     if (existing) {
@@ -27,7 +27,7 @@ export const UserService = {
     // Create new user and alias this ID to it
     const userId = await User.create();
     await UserAlias.create(userId, id);
-    return User.getOne(id);
+    return User.getByAlias(id);
   },
 
   /**
@@ -134,7 +134,7 @@ export const UserService = {
    * @param userB - The ID or alias to a user
    */
   async merge(userA: string, userB: string) {
-    const users = await User.get([userA, userB]);
+    const users = await User.getByAliases([userA, userB]);
 
     // If both IDs belong to the same user, no need to merge.
     // This can happen even if both IDs are different, because

@@ -46,8 +46,7 @@ export const Property = {
           SELECT
             name,
             for,
-            column,
-            dataType
+            column
           FROM property
           WHERE for = {propFor: String}
         `,
@@ -72,20 +71,18 @@ export const Property = {
    */
   async addPropColumns(onTable: PropFor, cols: Map<string, ValidPropDataType>) {
     const colQueries = [...cols.keys()]
-      .map(async (name) => {
-        if (!name) {
-          return;
-        }
+      .map((name) => {
         const type = cols.get(name);
         return [
-          `ALTER COLUMN IF EXISTS "${name}" Nullable(${type}) DEFAULT NULL`,
+          `MODIFY COLUMN IF EXISTS "${name}" Nullable(${type}) DEFAULT NULL`,
           `ADD COLUMN IF NOT EXISTS "${name}" Nullable(${type}) DEFAULT NULL`,
         ].join(",\n");
       })
       .join(",\n");
 
+    const query = `ALTER TABLE ${onTable}\n${colQueries}`;
     await clickhouse.command({
-      query: `ALTER TABLE ${onTable}\n${colQueries}`,
+      query,
       clickhouse_settings: {
         wait_end_of_query: 1,
       },

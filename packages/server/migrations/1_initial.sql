@@ -42,11 +42,14 @@ CREATE TABLE IF NOT EXISTS event (
   user_alias_id UUID,
   event String,
   timestamp DateTime DEFAULT now(),
-) ENGINE = MergeTree PRIMARY KEY (user_alias_id, event, timestamp);
+) ENGINE = MergeTree
+ORDER BY
+  (user_alias_id, event, timestamp);
 
--- User/Event property name to column mapping
+-- Property name to column mapping
 CREATE TABLE IF NOT EXISTS property (
   name String,
   for Enum('event', 'user'),
-  column String timestamp DateTime DEFAULT now(),
+  column String,
+  timestamp DateTime DEFAULT now(),
 ) ENGINE = ReplacingMergeTree PRIMARY KEY (name, column, for)

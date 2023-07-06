@@ -1,4 +1,5 @@
 import { Express, Request, Response } from "express";
+import logger from "../logger";
 import {
   EventService,
   EventPayload,
@@ -87,7 +88,7 @@ export const eventRoutes = (app: Express) => {
 
         res.status(200).send();
       } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(500).send();
       }
     }

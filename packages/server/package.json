@@ -6,7 +6,7 @@
   "main": "dist/server/index.js",
   "scripts": {
     "build": "rm -fr ./dist; yarn tsc;",
-    "dev": "ts-node-dev --respawn src/server/index.ts",
+    "dev": "ts-node-dev --respawn src/index.ts",
     "clickhouse:up": "docker run --rm -d -e CLICKHOUSE_DB=greenhouse -p8123:8123 -p9000:9000 -p9440:9440 --name clickhouse-server --ulimit nofile=262144:262144 clickhouse/clickhouse-server",
     "clickhouse:down": "docker stop clickhouse-server",
     "clickhouse:migrations": "./bin/migrations",

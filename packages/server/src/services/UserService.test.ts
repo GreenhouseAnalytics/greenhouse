@@ -10,14 +10,14 @@ import { UserService } from "./UserService";
 describe("UserService", () => {
   describe("getOrCreate", () => {
     beforeEach(async () => {
-      User.getOne = jest.fn().mockResolvedValue(undefined);
+      User.getByAlias = jest.fn().mockResolvedValue(undefined);
       UserAlias.create = jest.fn();
       User.create = jest.fn();
     });
 
     test("return existing user", async () => {
       const id = uuid();
-      User.getOne = jest.fn().mockImplementation((alias_id: string) => ({
+      User.getByAlias = jest.fn().mockImplementation((alias_id: string) => ({
         id,
         alias_id,
       }));
@@ -34,7 +34,7 @@ describe("UserService", () => {
         return createdId;
       });
       // Return undefined until User.create is called
-      User.getOne = jest.fn().mockImplementation(() => {
+      User.getByAlias = jest.fn().mockImplementation(() => {
         if (createdId) {
           return {
             id: createdId,
@@ -46,7 +46,7 @@ describe("UserService", () => {
       const user = await UserService.getOrCreate("user-id");
       expect(User.create).toBeCalled();
       expect(UserAlias.create).toBeCalledWith(expect.anything(), "user-id");
-      expect(User.getOne).toBeCalledTimes(2);
+      expect(User.getByAlias).toBeCalledTimes(2);
       expect(user.id).toBeDefined();
     });
   });
@@ -60,7 +60,7 @@ describe("UserService", () => {
         alias_id: "alias",
       };
 
-      User.getOne = jest.fn().mockResolvedValue(undefined);
+      User.getByAlias = jest.fn().mockResolvedValue(undefined);
       UserAlias.get = jest.fn();
       UserAlias.create = jest.fn();
       User.create = jest.fn();
@@ -222,7 +222,7 @@ describe("UserService", () => {
         alias_id: "aliasB",
       };
 
-      User.get = jest.fn();
+      User.getByAliases = jest.fn();
       User.update = jest.fn();
       User.delete = jest.fn();
       UserAlias.update = jest.fn();
@@ -232,7 +232,7 @@ describe("UserService", () => {
     });
 
     test("if A & B alias to the same user, there is nothing to merge", async () => {
-      User.get = jest.fn().mockResolvedValue([userA]);
+      User.getByAliases = jest.fn().mockResolvedValue([userA]);
       const result = await UserService.merge(
         userA.alias_id as string,
         userB.alias_id as string
@@ -253,7 +253,7 @@ describe("UserService", () => {
         p_boo: false, // timestamp 1
       };
 
-      User.get = jest.fn().mockResolvedValue([userA, userB]);
+      User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
       UserPropertyTime.getForUsers = jest.fn().mockResolvedValue([
         { property: "p_foo", user_id: userA.id, timestamp: 1 },
         { property: "p_foo", user_id: userB.id, timestamp: 2 },
@@ -278,7 +278,7 @@ describe("UserService", () => {
         ...userB,
       };
 
-      User.get = jest.fn().mockResolvedValue([userA, userB]);
+      User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
       UserPropertyTime.getForUsers = jest
         .fn()
         .mockResolvedValue([
@@ -296,7 +296,7 @@ describe("UserService", () => {
       userA = { ...userA, created_at: Date.now() };
       userB = { ...userB, created_at: Date.now() - 100 }; // B is older
 
-      User.get = jest.fn().mockResolvedValue([userA, userB]);
+      User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
       const result = await UserService.merge(userA.id, userB.id);
 
       expect(result.id).toBe(userB.id);
@@ -315,7 +315,7 @@ describe("UserService", () => {
       UserAlias.getForUser = jest
         .fn()
         .mockResolvedValue([{ id: "", user_id: "", alias: "alias" }]);
-      User.get = jest.fn().mockResolvedValue([userA, userB]);
+      User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
 
       await UserService.merge(userA.id, userB.id);
       expect(User.delete).toBeCalledWith(userA.id);
@@ -334,7 +334,7 @@ describe("UserService", () => {
         name: "Joann",
       };
 
-      User.get = jest.fn().mockResolvedValue([userA, userB]);
+      User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
       UserPropertyTime.getForUsers = jest.fn().mockResolvedValue([
         { property: "name", user_id: userA.id, timestamp: 1, type: "normal" },
         { property: "name", user_id: userB.id, timestamp: 2, type: "normal" },
@@ -361,7 +361,7 @@ describe("UserService", () => {
           p_foo: "woo",
         };
 
-        User.get = jest.fn().mockResolvedValue([userA, userB]);
+        User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
         UserPropertyTime.getForUsers = jest.fn().mockResolvedValue([
           {
             property: "p_foo",
@@ -397,7 +397,7 @@ describe("UserService", () => {
           p_foo: "newer",
         };
 
-        User.get = jest.fn().mockResolvedValue([userA, userB]);
+        User.getByAliases = jest.fn().mockResolvedValue([userA, userB]);
         UserPropertyTime.getForUsers = jest.fn().mockResolvedValue([
           {
             property: "p_foo",

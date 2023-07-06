@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GreenhouseCache } from "./index.d";
+import logger from "../logger";
 
 /**
  * A simple typescript decorator that caches function return values.
@@ -44,7 +45,7 @@ export function cache(cache: GreenhouseCache) {
       descriptor.value = obj[propertyKey];
       return descriptor;
     } else {
-      console.error("Cache decorator: Could not determine wrapped method!");
+      logger.error("Cache decorator: Could not determine wrapped method!");
     }
   };
 }
@@ -81,7 +82,7 @@ function cacheDecoratorWrapper(
       ? target[propertyKey]
       : null;
   if (!method) {
-    console.error("Cache decorator: Could not determine wrapped method!");
+    logger.error("Cache decorator: Could not determine wrapped method!");
     return;
   }
 
