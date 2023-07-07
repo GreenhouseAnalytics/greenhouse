@@ -92,7 +92,7 @@ export const User = {
    */
   async describe() {
     return clickhouse
-      .query({ query: `DESCRIBE event` })
+      .query({ query: `DESCRIBE user` })
       .then((resultSet) =>
         resultSet.json<{ data: { name: string; type: string }[] }>()
       )

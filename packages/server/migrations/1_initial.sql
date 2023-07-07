@@ -48,8 +48,8 @@ ORDER BY
 
 -- Property name to column mapping
 CREATE TABLE IF NOT EXISTS property (
-  name String,
-  for Enum('event', 'user'),
-  column String,
+  for Enum('event', 'user') COMMENT 'The table the property should map to',
+  name String COMMENT 'The full property name, as submitted by the client',
+  column String COMMENT 'The column the property maps to in either the event or user table',
   timestamp DateTime DEFAULT now(),
-) ENGINE = ReplacingMergeTree PRIMARY KEY (name, column, for)
+) ENGINE = ReplacingMergeTree PRIMARY KEY (for, name)
