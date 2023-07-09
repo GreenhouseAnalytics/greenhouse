@@ -30,8 +30,11 @@ services:
       <<: *common-env
       PORT: 3030
       LOGGING_FORMAT: pretty
+    # command: ts-node-dev --respawn src/index.ts
+    # volumes:
+    #   - ./packages/server/src:/app/src
     ports:
-      - 3030:3030
+      - 3031:3031
 
   # Run migrations
   migrations:
