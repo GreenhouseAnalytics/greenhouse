@@ -26,24 +26,19 @@ export default function ThemeProvider({
   });
 
   /**
-   * The styled provider to render
+   * Only load the stylesheet manager on the server-side
    */
-  const Render = useCallback(() => {
+  if (typeof window !== "undefined")
     return (
       <StyledThemeProvider theme={theme}>
         <GlobalStyle />
         {children}
       </StyledThemeProvider>
     );
-  }, [children]);
-
-  /**
-   * Only load the stylesheet manager on the server-side
-   */
-  if (typeof window !== "undefined") return <Render />;
   return (
     <StyleSheetManager sheet={styledComponentsStyleSheet.instance}>
-      <Render />
+      <GlobalStyle />
+      {children}
     </StyleSheetManager>
   );
 }

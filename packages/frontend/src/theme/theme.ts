@@ -1,17 +1,8 @@
-import { Pacifico, Roboto } from "next/font/google";
-
-export const pacifico = Pacifico({
-  weight: "400",
-  subsets: ["latin"],
-});
-export const roboto = Roboto({
-  weight: ["100", "300", "400", "500", "700", "900"],
-  subsets: ["latin"],
-});
+import { roboto, montserrat } from "./Fonts";
 
 export const theme = {
   font: roboto.style.fontFamily,
-  logoFont: pacifico.style.fontFamily,
+  logoFont: montserrat.style.fontFamily,
 
   primary: "var(--primary)",
   onPrimary: "var(--on-primary)",

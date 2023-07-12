@@ -23,6 +23,17 @@ services:
       test: wget --no-verbose --tries=1 --spider http://clickhouse:8123/ping || exit 1
       retries: 5
 
+  # MongoDB (for the frontend)
+  mongo:
+    image: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: greenhouse
+    ports:
+      - 27017:27017
+
   # Data ingestion server
   server:
     build: ./packages/server
