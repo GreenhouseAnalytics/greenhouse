@@ -1,3 +1,6 @@
+const { createVanillaExtractPlugin } = require("@vanilla-extract/next-plugin");
+const withVanillaExtract = createVanillaExtractPlugin();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   publicRuntimeConfig: {
@@ -6,10 +9,6 @@ const nextConfig = {
       NODE_ENV: process.env.NODE_ENV,
     },
   },
-
-  compiler: {
-    styledComponents: true,
-  },
 };
 
-module.exports = nextConfig;
+module.exports = withVanillaExtract(nextConfig);

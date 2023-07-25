@@ -7,10 +7,11 @@ export async function GET() {
     query: `
       SELECT DISTINCT event
       FROM event
+      order by event
     `,
     format: "JSONEachRow",
   });
-  const data = await resultSet.json();
+  const data = await resultSet.json<{ event: string }[]>();
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ events: data.map((i) => i.event) });
 }
