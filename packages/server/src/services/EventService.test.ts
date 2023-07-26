@@ -4,6 +4,8 @@ import { v4 as uuid } from "uuid";
 import { UserRecord } from "../data/User";
 import { Event } from "../data/Event";
 import { PROPERTY_PREFIX, PropFor } from "../data/Property";
+import { EventInventory } from "../data/EventInventory";
+import { PropertyInventory } from "../data/PropertyInventory";
 import { PropertyService } from "./PropertyService";
 import { UserService } from "./UserService";
 import { EventService, EventPayload } from "./EventService";
@@ -18,6 +20,8 @@ describe("EventService", () => {
         alias_id: "alias",
       };
       jest.spyOn(UserService, "getOrCreate").mockResolvedValue(user);
+      jest.spyOn(PropertyInventory, "insert").mockResolvedValue(null as never);
+      jest.spyOn(EventInventory, "insert").mockResolvedValue(null as never);
       jest.spyOn(PropertyService, "updatePropColumns").mockResolvedValue(
         new Map([
           ["foo", { name: `${PROPERTY_PREFIX}_foo`, type: "String" }],
@@ -35,9 +39,9 @@ describe("EventService", () => {
 
       expect(Event.insert).toBeCalledWith([
         {
-          time: expect.anything(),
-          event: "test.event",
+          name: "test.event",
           user_alias_id: user.alias_id,
+          timestamp: expect.anything(),
           [`${PROPERTY_PREFIX}_foo`]: "fuz",
         },
       ]);
@@ -62,9 +66,9 @@ describe("EventService", () => {
       } as unknown as EventPayload);
       expect(Event.insert).toBeCalledWith([
         {
-          time: expect.anything(),
-          event: "test.event",
+          name: "test.event",
           user_alias_id: user.alias_id,
+          timestamp: expect.anything(),
         },
       ]);
     });
@@ -77,10 +81,54 @@ describe("EventService", () => {
       } as unknown as EventPayload);
       expect(Event.insert).toBeCalledWith([
         {
-          time: expect.anything(),
-          event: "test.event",
+          name: "test.event",
           user_alias_id: user.alias_id,
+          timestamp: expect.anything(),
         },
+      ]);
+    });
+
+    test("add unique event names to event inventory", async () => {
+      await EventService.create({
+        userId: "alias",
+        events: [
+          { name: "test.event", props: {}, time: 1 },
+          { name: "test.another.event", props: {}, time: 1 },
+          { name: "test.event", props: {}, time: 1 },
+        ],
+      });
+
+      expect(EventInventory.insert).toBeCalledWith([
+        { name: "test.event" },
+        { name: "test.another.event" },
+        { name: "test.event" },
+      ]);
+    });
+
+    test("add properties to inventory", async () => {
+      await EventService.create({
+        userId: "alias",
+        events: [{ name: "test.event", props: { foo: "bar" }, time: 1 }],
+      });
+
+      expect(PropertyInventory.insert).toBeCalledWith([
+        { name: "foo", for: "event", event: "test.event" },
+      ]);
+    });
+
+    test("every unique property/event combination is added to property inventory", async () => {
+      await EventService.create({
+        userId: "alias",
+        events: [
+          { name: "test.event", props: { foo: "bar" }, time: 1 },
+          { name: "test.another.event", props: { foo: "baz" }, time: 1 },
+          { name: "test.event", props: { foo: "boo" }, time: 1 },
+        ],
+      });
+
+      expect(PropertyInventory.insert).toBeCalledWith([
+        { name: "foo", for: "event", event: "test.event" },
+        { name: "foo", for: "event", event: "test.another.event" },
       ]);
     });
   });

@@ -1,9 +1,9 @@
 import { clickhouse } from "../lib/clickhouse";
 
 export type EventRow = {
-  time: number;
-  event: string;
+  name: string;
   user_alias_id: string;
+  timestamp: number;
   [key: string]: string | number | boolean;
 };
 

@@ -4,6 +4,10 @@ import {
   UserPropertyTypeRecord,
   UserPropertySetType,
 } from "../data/UserPropertyTime";
+import {
+  PropertyInventory,
+  PropertyInventoryRow,
+} from "../data/PropertyInventory";
 import { UserAlias } from "../data/UserAlias";
 import { PropFor, PropValue } from "../data/Property";
 import logger from "../logger";
@@ -68,22 +72,30 @@ export const UserService = {
     );
 
     // Remap props to DB columns
+    const propInventory: PropertyInventoryRow[] = [];
     const propData = propItems.reduce((prev, [name, value]) => {
       const col = propColumnMap.get(name);
       if (typeof col !== "undefined") {
         prev[col.name] = PropertyService.castType(value, col.type);
+        propInventory.push({
+          name,
+          for: "user",
+        });
       }
       return prev;
     }, {} as UserRecord);
 
-    // Update DB
+    // User property data
     const update = { ...user, ...propData };
     const propSetValues = Object.keys(propData).map<
       [string, UserPropertySetType]
     >((name) => [name, type]);
+
+    // Save data
     await Promise.all([
       User.update(update),
       UserPropertyTime.setPropertyTimes(user.id, propSetValues),
+      PropertyInventory.insert(propInventory),
     ]);
   },
 

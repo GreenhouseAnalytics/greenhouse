@@ -3,6 +3,7 @@ import { v4 as uuid } from "uuid";
 import { User, UserRecord } from "../data/User";
 import { UserPropertyTime } from "../data/UserPropertyTime";
 import { UserAlias, AliasRecord } from "../data/UserAlias";
+import { PropertyInventory } from "../data/PropertyInventory";
 import { PropFor, PROPERTY_PREFIX } from "../data/Property";
 import { PropertyService } from "./PropertyService";
 import { UserService } from "./UserService";
@@ -98,6 +99,7 @@ describe("UserService", () => {
 
   describe("setProperties", () => {
     let user: UserRecord;
+    let updatePropColumnsFn: jest.SpyInstance;
 
     beforeEach(async () => {
       user = {
@@ -109,21 +111,20 @@ describe("UserService", () => {
       UserPropertyTime.setPropertyTimes = jest.fn();
 
       jest.spyOn(UserService, "getOrCreate").mockResolvedValue(user);
-      jest
+      jest.spyOn(PropertyInventory, "insert").mockResolvedValue(null as never);
+      updatePropColumnsFn = jest
         .spyOn(PropertyService, "updatePropColumns")
         .mockResolvedValue(new Map());
     });
 
     test("create prop columns and update user and prop times", async () => {
-      jest
-        .spyOn(PropertyService, "updatePropColumns")
-        .mockResolvedValue(
-          new Map([["foo", { name: `${PROPERTY_PREFIX}_foo`, type: "String" }]])
-        );
+      updatePropColumnsFn.mockResolvedValue(
+        new Map([["foo", { name: `${PROPERTY_PREFIX}_foo`, type: "String" }]])
+      );
 
       await UserService.setProperties(user.id, { foo: "bar" }, "normal");
 
-      expect(PropertyService.updatePropColumns).toBeCalledWith(PropFor.USER, [
+      expect(updatePropColumnsFn).toBeCalledWith(PropFor.USER, [
         ["foo", "bar"],
       ]);
       expect(User.update).toBeCalledWith({
@@ -132,6 +133,26 @@ describe("UserService", () => {
       });
       expect(UserPropertyTime.setPropertyTimes).toBeCalledWith(user.id, [
         ["p_foo", "normal"],
+      ]);
+    });
+
+    test("add props to inventory", async () => {
+      updatePropColumnsFn.mockResolvedValue(
+        new Map([
+          ["foo", { name: `${PROPERTY_PREFIX}_foo`, type: "String" }],
+          ["boo", { name: `${PROPERTY_PREFIX}_boo`, type: "String" }],
+        ])
+      );
+
+      await UserService.setProperties(
+        user.id,
+        { foo: "bar", boo: "baz" },
+        "normal"
+      );
+
+      expect(PropertyInventory.insert).toBeCalledWith([
+        { name: "foo", for: "user" },
+        { name: "boo", for: "user" },
       ]);
     });
   });

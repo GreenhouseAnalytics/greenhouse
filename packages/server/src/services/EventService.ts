@@ -1,5 +1,10 @@
 import { Event, EventRow } from "../data/Event";
 import { PropFor, PropValue } from "../data/Property";
+import { EventInventory, EventInventoryRow } from "../data/EventInventory";
+import {
+  PropertyInventory,
+  PropertyInventoryRow,
+} from "../data/PropertyInventory";
 import { UserService } from "./UserService";
 import { PropertyService } from "./PropertyService";
 
@@ -34,9 +39,11 @@ export class EventService {
       propEntries
     );
 
-    // Create event rows
+    // Create insert data
+    const eventInventory: EventInventoryRow[] = [];
+    const propInventory = new Map<string, PropertyInventoryRow>();
     const rows = payload.events.map((event) => {
-      // Remap props to DB columns
+      // Remap prop name to DB column name
       const props = Object.entries(event.props || {}).reduce<
         Record<string, PropValue | null>
       >((prev, [name, value]) => {
@@ -47,19 +54,29 @@ export class EventService {
           typeof value !== "undefined"
         ) {
           prev[col.name] = PropertyService.castType(value, col.type);
+          propInventory.set(`${name}:${event.name}`, {
+            name,
+            for: "event",
+            event: event.name,
+          } as PropertyInventoryRow);
         }
         return prev;
       }, {});
 
+      eventInventory.push({ name: event.name } as EventInventoryRow);
       return {
         ...props,
-        time: event.time,
-        event: event.name,
+        name: event.name,
         user_alias_id: user.alias_id,
+        timestamp: event.time,
       } as EventRow;
     });
 
-    // Add to DB
-    await Event.insert(rows);
+    // Add data to DB
+    await Promise.all([
+      Event.insert(rows),
+      EventInventory.insert(eventInventory),
+      PropertyInventory.insert(Array.from(propInventory.values())),
+    ]);
   }
 }
