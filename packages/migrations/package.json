@@ -1,0 +1,7 @@
+{
+  "name": "migrations",
+  "packageManager": "yarn@3.6.1",
+  "devDependencies": {
+    "dbmate": "^2.5.0"
+  }
+}
