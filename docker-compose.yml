@@ -1,10 +1,11 @@
 version: '3.8'
 
 x-common-env: &common-env
-   CLICKHOUSE_HOST: http://clickhouse:8123
-   CLICKHOUSE_DB: greenhouse
-   CLICKHOUSE_USER: default
-   CLICKHOUSE_PASSWORD:
+  CLICKHOUSE_HOST: http://clickhouse:8123
+  CLICKHOUSE_DB: greenhouse
+  CLICKHOUSE_USER: default
+  CLICKHOUSE_PASSWORD:
+  DATABASE_URL: clickhouse://default:@clickhouse:9000/greenhouse # Connect URL for migrations
 
 services:
   # Clickhouse DB
@@ -16,6 +17,9 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+    # volumes:
+    #   - ./clickhouse/backup.xml:/etc/clickhouse-server/config.d/backup.xml
+    #   - ./clickhouse/backup:/var/lib/clickhouse/backup
     ports:
       - 9000:9000
       - 8123:8123
@@ -49,10 +53,9 @@ services:
 
   # Run migrations
   migrations:
-    build: ./packages/server
+    build: ./packages/migrations
     environment:
       <<: *common-env
-    command: sh /app/bin/migrations
     depends_on:
       clickhouse:
         condition: service_healthy
