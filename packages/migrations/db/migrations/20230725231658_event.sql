@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS event (
   timestamp DateTime,
 ) ENGINE = MergeTree
 ORDER BY
-  (user_alias_id, event, timestamp);
+  (user_alias_id, name, timestamp);
 
 --
 -- ###################################################

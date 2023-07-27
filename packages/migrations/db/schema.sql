@@ -8,11 +8,11 @@ CREATE DATABASE IF NOT EXISTS greenhouse;
 CREATE TABLE greenhouse.event
 (
     `user_alias_id` UUID,
-    `event` String,
-    `timestamp` DateTime DEFAULT now()
+    `name` String,
+    `timestamp` DateTime
 )
 ENGINE = MergeTree
-ORDER BY (user_alias_id, event, timestamp)
+ORDER BY (user_alias_id, name, timestamp)
 SETTINGS index_granularity = 8192;
 
 CREATE TABLE greenhouse.event_inventory
@@ -37,7 +37,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE TABLE greenhouse.property_inventory
 (
-    `name` String COMMENT 'The property name',
+    `name` String COMMENT 'The full property name',
     `for` Enum8('event' = 1, 'user' = 2) COMMENT 'The table the property is on',
     `event` String COMMENT 'The event it was set on (if applicable)',
     `timestamp` DateTime DEFAULT now()
