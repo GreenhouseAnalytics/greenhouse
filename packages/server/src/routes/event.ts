@@ -42,7 +42,7 @@ export const convertPayload = (
 
   // Construct normalized event payload
   const now = Date.now();
-  const startTime = payload.t;
+  const startTime = payload.t ?? now;
   const data: EventPayload = {
     userId: payload.u,
     events: [],
