@@ -5,13 +5,13 @@ import { clickhouse } from "@/lib/clickhouse";
 export async function GET() {
   const resultSet = await clickhouse.query({
     query: `
-      SELECT DISTINCT event
-      FROM event
-      order by event
+      SELECT name
+      FROM event_inventory
+      order by name
     `,
     format: "JSONEachRow",
   });
-  const data = await resultSet.json<{ event: string }[]>();
+  const data = await resultSet.json<{ name: string }[]>();
 
-  return NextResponse.json({ events: data.map((i) => i.event) });
+  return NextResponse.json({ events: data.map((i) => i.name) });
 }

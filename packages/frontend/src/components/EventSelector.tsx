@@ -3,6 +3,7 @@ import React, {
   useState,
   useRef,
   useCallback,
+  useMemo,
   ChangeEvent,
 } from "react";
 import { PlusCircleIcon } from "@heroicons/react/24/outline";
@@ -26,14 +27,13 @@ export default React.memo(function EventSelector({ onSelect }: Props) {
   const [eventList, setEventList] = useState<string[]>([]);
   const [searchValue, setSearchValue] = useState("");
   const searchField = useRef<HTMLInputElement>(null);
-  const ref = useRef();
 
   /**
    * Load events
    */
   useEffect(() => {
     axios
-      .get<{ events: string[] }>("http://localhost:3000/api/data/events")
+      .get<{ events: string[] }>("http://localhost:3000/api/data/events/list")
       .then(({ data }) => {
         setEventList(data.events);
       });
@@ -69,6 +69,20 @@ export default React.memo(function EventSelector({ onSelect }: Props) {
     [onSelect]
   );
 
+  /**
+   * Filter the event list
+   */
+  const filteredList = useMemo(() => {
+    if (!searchValue || searchValue === "") {
+      return eventList;
+    }
+
+    const normalizedSearch = searchValue.toLowerCase();
+    return eventList.filter((name) =>
+      name.toLowerCase().includes(normalizedSearch)
+    );
+  }, [eventList, searchValue]);
+
   return (
     <Menu>
       <MenuButton className={blankButton} onClick={handleOpenClick}>
@@ -90,7 +104,7 @@ export default React.memo(function EventSelector({ onSelect }: Props) {
             portal={false}
           >
             <ComboboxList>
-              {eventList.map((name) => (
+              {filteredList.map((name) => (
                 <ComboboxOption
                   key={name}
                   value={name}
