@@ -9,7 +9,8 @@ export const body = style({
 
 export const toolbox = style({
   width: "300px",
-  margin: "15px",
+  marginRight: 15,
+  marginLeft: 15,
   background: theme.colors.surface,
   color: theme.colors.onSurface,
   borderRadius: "8px",

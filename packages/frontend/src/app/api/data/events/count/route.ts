@@ -5,6 +5,14 @@ import { clickhouse } from "@/lib/clickhouse";
 
 const DEFAULT_START_DAY = 30; // by default get data from 30 days ago
 
+export type EventOverTimeData = {
+  name: string;
+  stats: {
+    date: string;
+    count: number;
+  }[];
+};
+
 export async function GET(request: NextRequest) {
   // Get query params
   const { searchParams } = new URL(request.url);
@@ -48,22 +56,22 @@ export async function GET(request: NextRequest) {
     query: `
       SELECT
         CAST(count(name) as INTEGER) as count,
-        day
+        date
       FROM (
         SELECT
           event.*,
-          toDate(timestamp) as day
+          toDate(timestamp) as date
         FROM event
         WHERE
           name = {name: String}
           ${dateSql}
         ORDER BY timestamp
       )
-      GROUP BY day
+      GROUP BY date
     `,
     format: "JSONEachRow",
   });
-  const data = await resultSet.json<{ name: string }[]>();
+  const data = await resultSet.json<{ date: string; count: number }[]>();
 
-  return NextResponse.json({ name, stats: data });
+  return NextResponse.json({ name, stats: data } as EventOverTimeData);
 }

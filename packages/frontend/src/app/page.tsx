@@ -3,7 +3,8 @@
 import { useState, useCallback } from "react";
 
 import EventSelector from "@/components/EventSelector";
-import { toolbox, result, iconHeader } from "./page.css";
+import EventTimeChart from "@/components/EventTimeChart";
+import * as styles from "./page.css";
 
 export default function Home() {
   const [eventList, setEventList] = useState<string[]>([]);
@@ -16,9 +17,9 @@ export default function Home() {
   }, []);
 
   return (
-    <div>
-      <section className={toolbox}>
-        <div className={iconHeader}>
+    <div className={styles.body}>
+      <section className={styles.toolbox}>
+        <div className={styles.iconHeader}>
           <h1>Events</h1>
           <EventSelector onSelect={onEventSelect} />
         </div>
@@ -28,7 +29,9 @@ export default function Home() {
           ))}
         </ul>
       </section>
-      <div className={result} />
+      <div className={styles.result}>
+        <EventTimeChart events={eventList} />
+      </div>
     </div>
   );
 }
