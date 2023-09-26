@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { clickhouse } from "@/lib/clickhouse";
+import { knex } from "@/lib/clickhouse";
 
 export async function GET() {
-  const resultSet = await clickhouse.query({
-    query: `
-      SELECT name
-      FROM event_inventory
-      order by name
-    `,
-    format: "JSONEachRow",
-  });
-  const data = await resultSet.json<{ name: string }[]>();
+  const events = await knex<{ name: string }>("event_inventory")
+    .select("name")
+    .orderBy("name", "asc");
 
-  return NextResponse.json({ events: data.map((i) => i.name) });
+  return NextResponse.json({ events: events.map((i) => i.name) });
 }

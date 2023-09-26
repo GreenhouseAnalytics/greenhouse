@@ -19,9 +19,12 @@ export default React.memo(function EventTimeChart({ events }: Props) {
     }
 
     axios
-      .get<EventOverTimeData>("http://localhost:3000/api/data/events/count", {
-        params: { name: events[0] },
-      })
+      .get<EventOverTimeData>(
+        "http://localhost:3000/api/data/events/timeseries",
+        {
+          params: { name: events[0] },
+        }
+      )
       .then(({ data }) => {
         const { stats } = data;
 
