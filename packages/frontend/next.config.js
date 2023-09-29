@@ -9,6 +9,11 @@ const nextConfig = {
       NODE_ENV: process.env.NODE_ENV,
     },
   },
+
+  experimental: {
+    // https://github.com/knex/knex/issues/1128
+    serverComponentsExternalPackages: ["knex"],
+  },
 };
 
 module.exports = withVanillaExtract(nextConfig);

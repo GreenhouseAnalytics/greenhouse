@@ -1,40 +1,20 @@
 import { NextResponse, NextRequest } from "next/server";
 
-import { makeQuery, QueryResponse } from "./query";
-
-const DEFAULT_START_DAY = 30; // by default get data from 30 days ago
-
-export type EventFilter = {
-  name: string;
-};
-
-export type EvenTimeQuery = {
-  fromDate: string | null;
-  toDate: string | null;
-  events: EventFilter[];
-};
-
-export type EventOverTimeData = {
-  name: string;
-  stats: QueryResponse[];
-};
+import type { TimeSeriesQuery, TimeSeriesQueryResponse } from "./index";
+import { Query } from "./query";
 
 /**
  * Returns events count over time
  */
-export async function GET(request: NextRequest) {
-  // Get query params
-  const { searchParams } = new URL(request.url);
-  const name = searchParams.get("name");
-  if (!name) {
-    return NextResponse.json({}, { status: 404 });
-  }
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const query = body.query as TimeSeriesQuery;
+  const queryBuilder = new Query(query);
+  const events = await queryBuilder.run();
 
-  const config: EvenTimeQuery = {
-    toDate: searchParams.get("toDate"),
-    fromDate: searchParams.get("fromDate"),
-    events: [{ name }],
+  const payload: TimeSeriesQueryResponse = {
+    events,
+    scale: events[0].data.map((i) => i.time),
   };
-  const data = await makeQuery(config);
-  return NextResponse.json({ name, stats: data } as EventOverTimeData);
+  return NextResponse.json(payload);
 }

@@ -1,71 +1,182 @@
-import dayjs from "dayjs";
+import dayjs, { Dayjs } from "dayjs";
 import { Knex } from "knex";
 import { knex } from "@/lib/clickhouse";
 
-import type { EvenTimeQuery, EventFilter } from "./route";
+import type {
+  TimeSeriesQuery,
+  EventFilter,
+  TimeSeriesEvents,
+  TimeSeriesEventItem,
+} from "./index";
 
-const DEFAULT_START_DAY = 30; // by default get data from 30 days ago
-const DATE_FORMAT = "YYYY-MM-DD";
+const DATE_FORMAT = "YYYY-MM-DDTHH:mm:ss";
 
-export type QueryResponse = {
-  date: string;
+type QueryResponse = {
+  name: string;
+  time: string;
   count: number;
-}[];
+};
 
-/**
- * Build the query to fetch time-series data for one or more events
- */
-export function makeQuery(queryConfig: EvenTimeQuery) {
-  const params: Record<string, string | number> = {};
+type ExactTimeWindow = {
+  start: Dayjs;
+  end: Dayjs;
+};
 
-  const query = knex<QueryResponse>();
-  setDateRangeFilter(query, queryConfig);
+export class Query {
+  config: TimeSeriesQuery;
+  timeWindow: ExactTimeWindow;
+  sqlQuery: Knex.QueryBuilder<QueryResponse, QueryResponse[]>;
 
-  query
-    .with("all_data", (q) => {
-      const eventQueries = queryConfig.events.map((event) => queryEvent(event));
-      q.union(eventQueries);
-    })
-    .select("date", knex.raw("CAST(count(name) as INTEGER) as count"))
-    .from("all_data")
-    .groupBy("date");
+  constructor(config: TimeSeriesQuery) {
+    this.config = config;
+    this.sqlQuery = knex.queryBuilder<QueryResponse>();
+    this.timeWindow = this.timeWindow = {
+      start: dayjs().subtract(1, "day"),
+      end: dayjs(),
+    };
 
-  return query;
-}
-
-/**
- * Add date filters to the global params
- */
-function setDateRangeFilter(
-  query: Knex.QueryBuilder,
-  queryConfig: EvenTimeQuery
-) {
-  let fromDate = dayjs()
-    .subtract(DEFAULT_START_DAY, "days")
-    .format(DATE_FORMAT);
-  if (queryConfig.fromDate && dayjs(queryConfig.fromDate).isValid()) {
-    fromDate = dayjs(queryConfig.fromDate).format(DATE_FORMAT);
+    this.calculateTimeWindow();
   }
 
-  // Add to query
-  query.where((q) => {
-    q.where("timestamp", ">=", fromDate);
-    if (queryConfig.toDate && dayjs(queryConfig.toDate).isValid()) {
-      q.andWhere(
-        "timestamp",
-        "<=",
-        dayjs(queryConfig.fromDate).format(DATE_FORMAT)
-      );
-    }
-  });
-}
+  /**
+   * Calculate the fixed time window to query with
+   */
+  calculateTimeWindow() {
+    const window = this.config.timeWindow;
 
-/**
- * Query for a particular event
- */
-function queryEvent(event: EventFilter) {
-  return knex("event")
-    .select("*", knex.raw("toDate(timestamp) as date"))
-    .where("name", event.name)
-    .orderBy("timestamp");
+    // Fixed date range
+    if (window.type === "fixed") {
+      if (window.start && dayjs(window.start).isValid()) {
+        this.timeWindow.start = dayjs(window.start);
+      }
+      if (window.end && dayjs(window.end).isValid()) {
+        this.timeWindow.end = dayjs(window.end);
+      }
+    }
+    // Relative date range
+    else if (window.type === "relative") {
+      if (typeof window.start === "number") {
+        this.timeWindow.start = dayjs()
+          .add(window.start, window.unit)
+          .startOf(window.unit);
+      }
+      if (typeof window.end === "number") {
+        this.timeWindow.end = dayjs()
+          .add(window.end, window.unit)
+          .endOf(window.unit);
+      }
+    }
+    // Unknown time window
+    else {
+      console.warn(`Unknown window type`);
+    }
+  }
+
+  /**
+   * Create the time scale table to join to with all of the time points of the scale.
+   */
+  createTimescaleTable() {
+    const params = {
+      unit: this.config.aggregateTimeUnit,
+      start: this.timeWindow.start.format(DATE_FORMAT),
+      end: this.timeWindow.end.format(DATE_FORMAT),
+    };
+
+    // Ensure the value is expected, because we're injecting it directly into the SQL
+    const intervalUnit = this.config.aggregateTimeUnit;
+    if (!["hour", "day", "week", "month"].includes(intervalUnit)) {
+      throw new Error(`Invalid aggregation unit: '${intervalUnit}'`);
+    }
+
+    this.sqlQuery.with("timescale", (q) => {
+      q.select(
+        knex.raw(
+          `dateTrunc(:unit,
+            toDateTime(:start) + INTERVAL number ${intervalUnit}
+          ) as time`,
+          params
+        )
+      ).from(
+        knex.raw(
+          `numbers(
+            toUInt64(
+              dateDiff(
+                :unit,
+                toDateTime(:start),
+                toDateTime(:end)
+              )
+            )
+          )`,
+          params
+        )
+      );
+    });
+  }
+
+  /**
+   * Create the time series query for a single event
+   */
+  getEventQuery(event: EventFilter) {
+    const params = {
+      unit: this.config.aggregateTimeUnit,
+      name: event.name,
+    };
+    return knex("timescale")
+      .select(
+        "time",
+        knex.raw(`:name as event`, params),
+        knex.raw("CAST(count(*) as INTEGER) as count")
+      )
+      .leftJoin(
+        "event",
+        "timescale.time",
+        knex.raw(`dateTrunc(:unit, event.timestamp)`, params)
+      )
+      .where("event.name", event.name)
+      .groupBy("timescale.time")
+      .orderBy("timescale.time");
+  }
+
+  /**
+   * Build the query
+   */
+  createQuery() {
+    this.sqlQuery = knex.queryBuilder<QueryResponse>();
+    this.createTimescaleTable();
+
+    const eventQueries = this.config.events.map((eventQuery) =>
+      this.getEventQuery(eventQuery)
+    );
+    this.sqlQuery
+      .with("all_data", (q) => {
+        q.unionAll(eventQueries);
+      })
+      .select("event as name", "time", "count")
+      .from("all_data");
+  }
+
+  /**
+   * Run the query and return the results
+   */
+  async run(): Promise<TimeSeriesEvents> {
+    // Get data and aggregate it by event
+    this.createQuery();
+    const rows = await this.sqlQuery;
+
+    const results = new Map<string, TimeSeriesEventItem>();
+    rows.forEach(({ name, time, count }) => {
+      let eventData = results.get(name);
+      if (!eventData) {
+        eventData = {
+          name,
+          data: [],
+        };
+      }
+
+      eventData.data.push({ time, count });
+      results.set(name, eventData);
+    });
+
+    return Array.from(results.values());
+  }
 }

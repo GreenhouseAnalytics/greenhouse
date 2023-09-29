@@ -3,7 +3,10 @@ import axios from "axios";
 import Chart from "chart.js/auto";
 import dayjs from "dayjs";
 
-import { EventOverTimeData } from "@/app/api/data/events/count/route";
+import {
+  TimeSeriesQueryResponse,
+  TimeSeriesQuery,
+} from "@/app/api/data/events/timeseries";
 
 import * as styles from "./EventTimeChart.css";
 
@@ -12,61 +15,73 @@ type Props = {
 };
 export default React.memo(function EventTimeChart({ events }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<Chart>();
 
   useEffect(() => {
     if (!events.length) {
       return;
     }
 
+    const query: TimeSeriesQuery = {
+      timeWindow: {
+        type: "relative",
+        start: -30,
+        unit: "day",
+      },
+      aggregateTimeUnit: "day",
+      events: events.map((name) => ({ name })),
+    };
+
     axios
-      .get<EventOverTimeData>(
+      .post<TimeSeriesQueryResponse>(
         "http://localhost:3000/api/data/events/timeseries",
-        {
-          params: { name: events[0] },
-        }
+        { query }
       )
       .then(({ data }) => {
-        const { stats } = data;
+        const { events, scale } = data;
 
         if (!canvasRef.current) {
           return;
         }
-        new Chart(canvasRef.current, {
-          type: "line",
-          options: {
-            responsive: true,
-            plugins: {
-              tooltip: {
-                intersect: false,
-              },
-              legend: {
-                display: false,
-              },
-            },
-          },
-          data: {
-            labels: stats.map((row, i) => {
-              if (i % 2 === 0) {
-                return dayjs(row.date).format("MMM D");
-              }
-              return "";
-            }),
-            datasets: [
-              {
-                label: events[0],
-                data: stats.map((row) => row.count),
-                spanGaps: true,
-                segment: {
-                  borderDash: (ctx) => {
-                    return ctx.p1DataIndex === stats.length - 1
-                      ? [6, 6]
-                      : undefined;
-                  },
+
+        if (!chartRef.current) {
+          chartRef.current = new Chart(canvasRef.current, {
+            type: "line",
+            options: {
+              responsive: true,
+              plugins: {
+                tooltip: {
+                  intersect: false,
+                },
+                legend: {
+                  display: false,
                 },
               },
-            ],
+            },
+            data: {
+              labels: scale.map((time, i) => {
+                if (i % 2 === 0) {
+                  return dayjs(time).format("MMM D");
+                }
+                return "";
+              }),
+              datasets: [],
+            },
+          });
+        }
+
+        // Update dataset
+        chartRef.current.data.datasets = events.map((event) => ({
+          label: event.name,
+          data: event.data.map((i) => i.count),
+          spanGaps: true,
+          segment: {
+            borderDash: (ctx: { p1DataIndex: number }) => {
+              return ctx.p1DataIndex === scale.length - 1 ? [6, 6] : undefined;
+            },
           },
-        });
+        }));
+        chartRef.current.update();
       });
   }, [events]);
 
